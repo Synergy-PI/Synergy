@@ -18,15 +18,15 @@ burocrático guiado (recursos Premium).
 
 ## Funcionalidades do MVP
 
-| Área             | O que já funciona                                                                                                                                                                                       |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cadastro e login | Perfis distintos (Startup, Investidor anjo, Profissional) com campos específicos; sessão segura; proteção contra bots                                                                                   |
-| Painel           | Abas Comunidade, Eventos, Vagas e Premium; resumo por perfil; edição de perfil                                                                                                                          |
-| Eventos          | Listagem pública (próximos/passados), detalhe, investidores anjo **confirmam presença publicamente**, inscrição com **janela de prioridade Premium** e capacidade; criação por administradores          |
-| Vagas            | Mural público com filtros (busca, tipo, modelo); startups **publicam, editam, ativam/desativam e excluem** suas vagas                                                                                   |
-| Licitações       | Startups veem os **editais com propostas abertas no PNCP que combinam com o seu nicho**, com filtros (palavra-chave, estado, modalidade), motivo da aderência e link para o edital oficial              |
-| Premium          | Bloqueio de recursos para o plano gratuito; ativação simulada (sem pagamento); comunidade (fórum com respostas); roadmap burocrático com progresso por startup; templates de landing page para captação |
-| Infra            | Docker (dev e produção), CI/CD no GitHub Actions, deploy com Cloudflare Tunnel + WAF + Bot Fight Mode + Turnstile                                                                                       |
+| Área             | O que já funciona                                                                                                                                                                                              |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cadastro e login | Perfis distintos (Startup, Investidor anjo, Profissional) com campos específicos; sessão segura; proteção contra bots                                                                                          |
+| Painel           | Abas Comunidade, Eventos, Vagas e Premium; resumo por perfil; edição de perfil                                                                                                                                 |
+| Eventos          | Listagem pública (próximos/passados), detalhe, investidores anjo **confirmam presença publicamente**, inscrição com **janela de prioridade Premium** e capacidade; criação por administradores                 |
+| Vagas            | Mural público com filtros (busca, tipo, modelo); startups **publicam, editam, ativam/desativam e excluem** suas vagas                                                                                          |
+| Licitações       | Startups veem os **editais com propostas abertas no PNCP que combinam com o seu nicho**, em tabela paginada, com filtros (palavra-chave, estado, modalidade), motivo da aderência e link para o edital oficial |
+| Premium          | Bloqueio de recursos para o plano gratuito; ativação simulada (sem pagamento); comunidade (fórum com respostas); roadmap burocrático com progresso por startup; templates de landing page para captação        |
+| Infra            | Docker (dev e produção), CI/CD no GitHub Actions, deploy com Cloudflare Tunnel + WAF + Bot Fight Mode + Turnstile                                                                                              |
 
 ## Stack
 

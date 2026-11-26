@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, Landmark } from 'lucide-react';
+import { Landmark } from 'lucide-react';
 import { requireRole } from '@/lib/auth/dal';
 import { listNiches } from '@/lib/data/niches';
 import {
@@ -11,6 +11,8 @@ import {
 } from '@/lib/data/tenders';
 import { formatRelative } from '@/lib/format';
 import {
+  TENDER_PAGE_SIZES,
+  pageForPageSize,
   parseTenderFilters,
   tenderFiltersQuery,
   type TenderSearchParams,
@@ -18,9 +20,11 @@ import {
 import { NICHE_TENDER_TERMS, getTenderMatcher } from '@/lib/tenders/niches';
 import { UF_NAMES, inState, isUf, ofState, ufFromCity } from '@/lib/tenders/states';
 import { isSyncRunning, syncAvailability } from '@/lib/tenders/sync-policy';
-import { TenderCard } from '@/components/tenders/tender-card';
 import { TenderFilters } from '@/components/tenders/tender-filters';
+import { TenderPageSizeSelect } from '@/components/tenders/tender-page-size-select';
+import { TenderPagination } from '@/components/tenders/tender-pagination';
 import { TenderSyncPanel, type TenderSyncView } from '@/components/tenders/tender-sync-panel';
+import { TenderTable } from '@/components/tenders/tender-table';
 import { Alert } from '@/components/ui/alert';
 import { buttonVariants } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -81,6 +85,13 @@ export default async function TendersPage({ searchParams }: Props) {
   const syncedUfs = syncs.map((sync) => sync.uf).filter(isUf);
   const hasTendersInScope = modalities.length > 0;
   const pageHref = (page: number) => `/app/licitacoes?${tenderFiltersQuery(filters, { page })}`;
+  // O resultado traz a página efetiva (a pedida pode passar do fim): é dela que partem os links.
+  const shown = { ...filters, page: result.page };
+  const pageSizeOptions = TENDER_PAGE_SIZES.map((pageSize) => ({
+    size: pageSize,
+    href: `/app/licitacoes?${tenderFiltersQuery(shown, { pageSize, page: pageForPageSize(shown, pageSize) })}`,
+  }));
+  const lastItem = result.firstItem + result.items.length - 1;
 
   return (
     <div className="space-y-6">
@@ -173,46 +184,25 @@ export default async function TendersPage({ searchParams }: Props) {
             {filters.q ? ` para "${filters.q}"` : ''}.
           </p>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            {result.items.map((tender) => (
-              <TenderCard key={tender.id} tender={tender} now={now} />
-            ))}
-          </div>
+          <TenderTable tenders={result.items} now={now} listQuery={tenderFiltersQuery(shown)} />
 
-          {result.pageCount > 1 ? (
-            <nav
-              className="flex items-center justify-between gap-3"
-              aria-label="Paginação das licitações"
-            >
-              {result.page > 1 ? (
-                <Link
-                  data-testid="tenders-previous-page"
-                  href={pageHref(result.page - 1)}
-                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                >
-                  <ChevronLeft className="size-4" aria-hidden />
-                  Anterior
-                </Link>
-              ) : (
-                <span />
-              )}
-              <span className="text-sm text-slate-600">
-                Página {result.page} de {result.pageCount}
-              </span>
-              {result.page < result.pageCount ? (
-                <Link
-                  data-testid="tenders-next-page"
-                  href={pageHref(result.page + 1)}
-                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                >
-                  Próxima
-                  <ChevronRight className="size-4" aria-hidden />
-                </Link>
-              ) : (
-                <span />
-              )}
-            </nav>
-          ) : null}
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <TenderPageSizeSelect value={filters.pageSize} options={pageSizeOptions} />
+              <p className="text-sm text-slate-600" data-testid="tenders-page-range">
+                Mostrando {result.firstItem.toLocaleString('pt-BR')}–
+                {lastItem.toLocaleString('pt-BR')} de {result.total.toLocaleString('pt-BR')}
+                {result.truncated ? '+' : ''}
+              </p>
+            </div>
+            {result.pageCount > 1 ? (
+              <TenderPagination
+                page={result.page}
+                pageCount={result.pageCount}
+                hrefFor={pageHref}
+              />
+            ) : null}
+          </div>
         </section>
       ) : hasTendersInScope ? (
         <EmptyState

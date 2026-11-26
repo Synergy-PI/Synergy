@@ -15,8 +15,13 @@ export const tenderSortLabels: Record<TenderSort, string> = {
   valor: 'Maior valor estimado',
 };
 
+/** Opções do seletor de itens por página da tabela de licitações. */
+export const TENDER_PAGE_SIZES = [20, 50, 100] as const;
+export type TenderPageSize = (typeof TENDER_PAGE_SIZES)[number];
+export const DEFAULT_TENDER_PAGE_SIZE: TenderPageSize = 20;
+
 export type TenderSearchParams = Partial<
-  Record<'q' | 'nicho' | 'uf' | 'modalidade' | 'ordem' | 'pagina', string | string[]>
+  Record<'q' | 'nicho' | 'uf' | 'modalidade' | 'ordem' | 'pagina' | 'porPagina', string | string[]>
 >;
 
 export type TenderFilters = {
@@ -28,6 +33,7 @@ export type TenderFilters = {
   modalityId: number | null;
   sort: TenderSort;
   page: number;
+  pageSize: TenderPageSize;
 };
 
 export type TenderFilterContext = {
@@ -84,6 +90,9 @@ export function parseTenderFilters(
     modalityId: positiveInt(first(params.modalidade), 999),
     sort,
     page: positiveInt(first(params.pagina), MAX_PAGE) ?? 1,
+    pageSize:
+      TENDER_PAGE_SIZES.find((size) => String(size) === first(params.porPagina)) ??
+      DEFAULT_TENDER_PAGE_SIZE,
   };
 }
 
@@ -103,5 +112,14 @@ export function tenderFiltersQuery(
   if (next.modalityId) params.set('modalidade', String(next.modalityId));
   params.set('ordem', next.sort);
   if (next.page > 1) params.set('pagina', String(next.page));
+  if (next.pageSize !== DEFAULT_TENDER_PAGE_SIZE) params.set('porPagina', String(next.pageSize));
   return params.toString();
+}
+
+/**
+ * Página que, com o novo tamanho, continua mostrando o primeiro item da página atual: trocar de 20
+ * para 50 itens na página 4 (itens 61 a 80) leva à página 2 (itens 51 a 100), não de volta ao início.
+ */
+export function pageForPageSize(filters: TenderFilters, pageSize: TenderPageSize): number {
+  return Math.floor(((filters.page - 1) * filters.pageSize) / pageSize) + 1;
 }

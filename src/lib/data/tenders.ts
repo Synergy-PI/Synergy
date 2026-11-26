@@ -3,6 +3,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { TenderFilters } from '@/lib/tenders/filters';
 import {
+  NICHE_TENDER_TERMS,
   getTenderMatcher,
   matchTender,
   type TenderMatch,
@@ -10,8 +11,6 @@ import {
 } from '@/lib/tenders/niches';
 import { ufFromCity, type Uf } from '@/lib/tenders/states';
 import { tokenize } from '@/lib/tenders/text';
-
-export const TENDERS_PAGE_SIZE = 10;
 
 /** Teto de licitações avaliadas em memória ao ordenar por aderência ao nicho. */
 const MAX_NICHE_CANDIDATES = 5000;
@@ -32,6 +31,16 @@ const tenderListSelect = {
   closesAt: true,
   publishedAt: true,
   sourceUrl: true,
+  // Situação da análise dos documentos, para a linha mostrar se os requisitos já estão prontos.
+  analysis: {
+    select: {
+      status: true,
+      attempts: true,
+      heartbeatAt: true,
+      completedAt: true,
+      requirementCount: true,
+    },
+  },
 } as const;
 
 type TenderRow = Prisma.TenderGetPayload<{ select: typeof tenderListSelect }>;
@@ -47,6 +56,8 @@ export type TenderSearchResult = {
   total: number;
   page: number;
   pageCount: number;
+  /** Posição (a partir de 1) do primeiro item da página no resultado; 0 quando não há itens. */
+  firstItem: number;
   /** A busca por nicho atingiu o teto de candidatas: pode haver mais resultados do que os contados. */
   truncated: boolean;
 };
@@ -145,10 +156,11 @@ const databaseOrder: Record<TenderFilters['sort'], Prisma.TenderOrderByWithRelat
   valor: [{ estimatedValue: 'desc' }, { closesAt: 'asc' }],
 };
 
-function paginate(total: number, requestedPage: number) {
-  const pageCount = Math.max(1, Math.ceil(total / TENDERS_PAGE_SIZE));
+function paginate(total: number, requestedPage: number, pageSize: number) {
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(requestedPage, pageCount);
-  return { page, pageCount, skip: (page - 1) * TENDERS_PAGE_SIZE };
+  const skip = (page - 1) * pageSize;
+  return { page, pageCount, skip, firstItem: total === 0 ? 0 : skip + 1 };
 }
 
 /**
@@ -164,12 +176,12 @@ export async function searchTenders(
 
   if (!matcher) {
     const total = await prisma.tender.count({ where });
-    const { page, pageCount, skip } = paginate(total, filters.page);
+    const { page, pageCount, skip, firstItem } = paginate(total, filters.page, filters.pageSize);
     const rows = await prisma.tender.findMany({
       where,
       orderBy: [...databaseOrder[filters.sort], { id: 'asc' }],
       skip,
-      take: TENDERS_PAGE_SIZE,
+      take: filters.pageSize,
       select: tenderListSelect,
     });
     return {
@@ -177,6 +189,7 @@ export async function searchTenders(
       total,
       page,
       pageCount,
+      firstItem,
       truncated: false,
     };
   }
@@ -185,8 +198,12 @@ export async function searchTenders(
   // todas as candidatas e, depois, os dados completos apenas da página exibida.
   const { candidates, truncated } = await findNicheCandidates(where, matcher);
   candidates.sort(candidateSorters[filters.sort]);
-  const { page, pageCount, skip } = paginate(candidates.length, filters.page);
-  const pageCandidates = candidates.slice(skip, skip + TENDERS_PAGE_SIZE);
+  const { page, pageCount, skip, firstItem } = paginate(
+    candidates.length,
+    filters.page,
+    filters.pageSize,
+  );
+  const pageCandidates = candidates.slice(skip, skip + filters.pageSize);
 
   const rows = await prisma.tender.findMany({
     where: { id: { in: pageCandidates.map((candidate) => candidate.id) } },
@@ -198,7 +215,7 @@ export async function searchTenders(
     return row ? [toListItem(row, candidate.match)] : [];
   });
 
-  return { items, total: candidates.length, page, pageCount, truncated };
+  return { items, total: candidates.length, page, pageCount, firstItem, truncated };
 }
 
 /**
@@ -220,6 +237,21 @@ export async function countTendersForStartup(
   const where: Prisma.TenderWhereInput = { closesAt: { gt: now }, ...(uf ? { uf } : {}) };
   const { candidates } = await findNicheCandidates(where, matcher);
   return candidates.length;
+}
+
+/**
+ * Licitações abertas de um estado que casam com pelo menos um nicho: são as que as startups veem por
+ * padrão e, por isso, as que vale analisar antes que alguém peça.
+ */
+export async function listNicheMatchedTenderIds(uf: Uf, now: Date = new Date()): Promise<string[]> {
+  const ids = new Set<string>();
+  for (const slug of Object.keys(NICHE_TENDER_TERMS)) {
+    const matcher = getTenderMatcher(slug);
+    if (!matcher) continue;
+    const { candidates } = await findNicheCandidates({ closesAt: { gt: now }, uf }, matcher);
+    for (const candidate of candidates) ids.add(candidate.id);
+  }
+  return [...ids];
 }
 
 /** Modalidades presentes entre as licitações abertas, para o filtro. */

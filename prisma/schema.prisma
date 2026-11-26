@@ -73,6 +73,34 @@ enum TenderSyncStatus {
   FAILED
 }
 
+/// Situação da análise dos documentos de uma licitação (leitura do edital e extração dos requisitos).
+/// PENDING = na fila (ou aguardando nova tentativa); UNAVAILABLE = não há documento legível.
+enum TenderAnalysisStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  UNAVAILABLE
+}
+
+/// Situação da organização dos requisitos por IA (opcional; depende de uma chave do OpenRouter).
+enum TenderAiStatus {
+  NONE
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+/// Grupo de habilitação de um requisito (arts. 62 a 70 da Lei 14.133/2021).
+enum TenderRequirementCategory {
+  TECHNICAL
+  FINANCIAL
+  LEGAL
+  FISCAL
+  DECLARATION
+  OTHER
+}
+
 // ---------------------------------------------------------------------------
 // Usuários e perfis
 // ---------------------------------------------------------------------------
@@ -95,6 +123,21 @@ model User {
   organizedEvents Event[]
   forumPosts      ForumPost[]
   forumReplies    ForumReply[]
+  aiKey           UserAiKey?
+  aiReviews       TenderAnalysis[]
+}
+
+/// Chave de API do OpenRouter do próprio usuário, usada para organizar requisitos de editais com IA.
+/// Fica fora de `User` para nunca entrar por engano em uma consulta de usuário.
+model UserAiKey {
+  userId     String   @id
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Chave cifrada com AES-256-GCM (ver src/lib/crypto/secret-box.ts). Nunca é enviada ao navegador.
+  ciphertext String   @db.VarChar(600)
+  /// Últimos 4 caracteres, para o usuário reconhecer qual chave está salva.
+  last4      String   @db.Char(4)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 /// Nicho de mercado usado para segmentar startups (fintech, healthtech, ...).
@@ -161,23 +204,23 @@ model ProfessionalProfile {
 // ---------------------------------------------------------------------------
 
 model Event {
-  id          String      @id @default(cuid())
-  title       String
-  description String      @db.Text
-  type        EventType
-  origin      EventOrigin @default(INTERNAL)
-  startsAt    DateTime
-  endsAt      DateTime?
-  location    String?
-  isOnline    Boolean     @default(false)
-  externalUrl String?
-  capacity    Int?
+  id            String      @id @default(cuid())
+  title         String
+  description   String      @db.Text
+  type          EventType
+  origin        EventOrigin @default(INTERNAL)
+  startsAt      DateTime
+  endsAt        DateTime?
+  location      String?
+  isOnline      Boolean     @default(false)
+  externalUrl   String?
+  capacity      Int?
   /// Até esta data a inscrição é exclusiva para contas Premium (sistema de prioridade).
   priorityUntil DateTime?
-  organizerId String
-  organizer   User        @relation(fields: [organizerId], references: [id])
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  organizerId   String
+  organizer     User        @relation(fields: [organizerId], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   attendances EventAttendance[]
 
@@ -327,8 +370,82 @@ model Tender {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
+  analysis TenderAnalysis?
+
   @@index([uf, closesAt])
   @@index([closesAt])
+}
+
+/// Análise dos documentos oficiais de uma licitação (uma por licitação, compartilhada por todas as startups).
+/// É feita em segundo plano (src/lib/tenders/analysis.ts): baixar do PNCP é lento e falha com frequência.
+/// Some junto com a licitação quando ela deixa de aceitar propostas.
+model TenderAnalysis {
+  tenderId         String               @id
+  tender           Tender               @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  status           TenderAnalysisStatus @default(PENDING)
+  /// Pedidos de usuários (1) passam à frente da fila automática pós-sincronização (0).
+  priority         Int                  @default(0)
+  /// Tentativas de baixar e ler os documentos já feitas.
+  attempts         Int                  @default(0)
+  /// Só volta a ser processada depois deste momento (espera entre tentativas).
+  nextAttemptAt    DateTime             @default(now())
+  /// Atualizado durante o processamento; permite detectar execuções interrompidas.
+  heartbeatAt      DateTime?
+  completedAt      DateTime?
+  /// Motivo da última falha ou da indisponibilidade, em português, exibido ao usuário.
+  error            String?              @db.VarChar(300)
+  /// Documentos lidos: [{ type, title, kind, pages, textPages }].
+  documents        Json?
+  /// Exigências encontradas (sem contar as regras de procedimento).
+  requirementCount Int                  @default(0)
+
+  aiStatus        TenderAiStatus @default(NONE)
+  /// Modelo que respondeu (ex.: "nvidia/nemotron-3.5-super-vl:free").
+  aiModel         String?
+  aiError         String?        @db.VarChar(300)
+  aiHeartbeatAt   DateTime?
+  aiCompletedAt   DateTime?
+  /// Quem pediu a organização por IA: a chave dessa pessoa é usada, se ela tiver uma.
+  aiRequestedById String?
+  aiRequestedBy   User?          @relation(fields: [aiRequestedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  requirements TenderRequirement[]
+
+  @@index([status, nextAttemptAt])
+  @@index([aiStatus])
+  @@index([aiRequestedById])
+}
+
+/// Cláusula da seção de habilitação de um edital, com o texto literal e onde ela está.
+model TenderRequirement {
+  id           String                    @id @default(cuid())
+  tenderId     String
+  analysis     TenderAnalysis            @relation(fields: [tenderId], references: [tenderId], onDelete: Cascade)
+  /// Ordem em que a cláusula aparece nos documentos.
+  position     Int
+  category     TenderRequirementCategory
+  /// Regra de procedimento (como a administração conduz a habilitação), não exigência à empresa.
+  procedural   Boolean                   @default(false)
+  /// Numeração da cláusula no documento ("8.1.3", "a)"), quando houver.
+  label        String?                   @db.VarChar(24)
+  /// Texto literal da cláusula: nada é reescrito.
+  text         String                    @db.Text
+  /// Tipo do documento de origem no PNCP ("Edital", "Termo de Referência"...).
+  documentType String                    @db.VarChar(80)
+  page         Int
+
+  /// Classificação da IA; nula enquanto a IA não organizou a licitação.
+  aiCategory   TenderRequirementCategory?
+  aiProcedural Boolean?
+  /// Título curto escrito pela IA (só é gravado se todos os números dele existirem em `text`).
+  aiTitle      String?                    @db.VarChar(200)
+  /// Exigência que pode impedir uma empresa pequena de participar (capital mínimo, atestado com quantitativo...).
+  aiHighlight  Boolean?
+
+  @@unique([tenderId, position])
 }
 
 /// Controle da sincronização de licitações por estado (uma linha por UF).

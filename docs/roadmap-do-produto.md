@@ -50,13 +50,13 @@ Fora do escopo (mantido): matching automático de startups similares; consultori
 
 A primeira etapa (encontrar editais) está pronta. Próximos passos, em ordem sugerida:
 
-| #   | Item                                                                                                                                                                           | Área sugerida        |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------- |
-| L1  | **Resumo dos requisitos com IA**: ler os documentos do edital e listar requisitos de habilitação para validação humana (gravar o resultado por edital, pois a análise é lenta) | Back-end + IA        |
-| L2  | **Sincronização agendada** (diária) dos estados em uso, em vez do botão manual                                                                                                 | Back-end / Infra     |
-| L3  | **Acompanhar licitações**: a startup marca interesse/participação e isso aparece no perfil para investidores (exige não apagar `Tender` encerradas)                            | Full stack           |
-| L4  | Termos de busca próprios da startup (além dos termos do nicho) e aviso de novos editais aderentes                                                                              | Back-end + Front-end |
-| L5  | Decidir se a aba (ou o resumo com IA) entra no plano Premium — hoje é gratuita para startups                                                                                   | Produto              |
+| #   | Item                                                                                                                                                                                                                    | Área sugerida        |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| L1  | ✅ **Requisitos do edital em tabela** (`/app/licitacoes/[id]`): leitura dos documentos em segundo plano, extração por regras e organização opcional por IA com a chave do usuário. Próximo: OCR para editais escaneados | Back-end + IA        |
+| L2  | **Sincronização agendada** (diária) dos estados em uso, em vez do botão manual                                                                                                                                          | Back-end / Infra     |
+| L3  | **Acompanhar licitações**: a startup marca interesse/participação e isso aparece no perfil para investidores (exige não apagar `Tender` encerradas)                                                                     | Full stack           |
+| L4  | Termos de busca próprios da startup (além dos termos do nicho) e aviso de novos editais aderentes                                                                                                                       | Back-end + Front-end |
+| L5  | Decidir se a aba (ou o resumo com IA) entra no plano Premium — hoje é gratuita para startups                                                                                                                            | Produto              |
 
 ### Média prioridade
 

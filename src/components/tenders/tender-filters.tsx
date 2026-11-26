@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Search } from 'lucide-react';
 import {
   ALL,
+  DEFAULT_TENDER_PAGE_SIZE,
   TENDER_SORTS,
   tenderSortLabels,
   type TenderFilters as Filters,
@@ -42,6 +43,11 @@ export function TenderFilters({
       action="/app/licitacoes"
       className="grid gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-4"
     >
+      {/* Filtrar de novo volta à primeira página, mas mantém os itens por página escolhidos. */}
+      {filters.pageSize !== DEFAULT_TENDER_PAGE_SIZE ? (
+        <input type="hidden" name="porPagina" value={filters.pageSize} />
+      ) : null}
+
       <Field label="Palavra-chave" htmlFor="q" className="sm:col-span-2 lg:col-span-4">
         <Input
           id="q"

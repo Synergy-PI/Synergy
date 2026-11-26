@@ -6,3 +6,10 @@ export const tenderSyncSchema = z.object({
 });
 
 export type TenderSyncInput = z.infer<typeof tenderSyncSchema>;
+
+/** Identificador de uma licitação no nosso banco (cuid). */
+export const tenderIdSchema = z.object({
+  tenderId: z
+    .string({ error: 'Licitação inválida' })
+    .regex(/^[a-z0-9]{20,32}$/, 'Licitação inválida'),
+});

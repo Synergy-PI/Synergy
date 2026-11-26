@@ -6,6 +6,7 @@ import type {
   Plan,
   Role,
   StartupStage,
+  TenderRequirementCategory,
   WorkMode,
 } from '@/generated/prisma/enums';
 
@@ -60,6 +61,15 @@ export const workModeLabels: Record<WorkMode, string> = {
   REMOTE: 'Remoto',
   HYBRID: 'Híbrido',
   ONSITE: 'Presencial',
+};
+
+export const requirementCategoryLabels: Record<TenderRequirementCategory, string> = {
+  TECHNICAL: 'Qualificação técnica',
+  FINANCIAL: 'Qualificação econômico-financeira',
+  LEGAL: 'Habilitação jurídica',
+  FISCAL: 'Regularidade fiscal, social e trabalhista',
+  DECLARATION: 'Declarações',
+  OTHER: 'Outras exigências de habilitação',
 };
 
 /** Transforma um mapa de rótulos em opções para <select>. */

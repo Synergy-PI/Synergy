@@ -39,6 +39,9 @@ type Limiters = {
   login: ReturnType<typeof createRateLimiter>;
   register: ReturnType<typeof createRateLimiter>;
   tenderSync: ReturnType<typeof createRateLimiter>;
+  tenderAnalysis: ReturnType<typeof createRateLimiter>;
+  tenderAiShared: ReturnType<typeof createRateLimiter>;
+  aiKey: ReturnType<typeof createRateLimiter>;
 };
 
 // Guardado em globalThis para sobreviver ao hot reload em desenvolvimento.
@@ -49,4 +52,9 @@ export const limiters: Limiters = (globalLimiters.__synergyLimiters ??= {
   register: createRateLimiter({ limit: 5, windowMs: 60 * 60 * 1000 }),
   // Cada sincronização de licitações faz dezenas de chamadas ao PNCP: poucos estados por hora por usuário.
   tenderSync: createRateLimiter({ limit: 5, windowMs: 60 * 60 * 1000 }),
+  // Cada análise baixa os documentos de um edital no PNCP.
+  tenderAnalysis: createRateLimiter({ limit: 40, windowMs: 60 * 60 * 1000 }),
+  // Uso da chave de IA compartilhada do servidor; quem usa a própria chave não passa por este limite.
+  tenderAiShared: createRateLimiter({ limit: 15, windowMs: 60 * 60 * 1000 }),
+  aiKey: createRateLimiter({ limit: 10, windowMs: 60 * 60 * 1000 }),
 });

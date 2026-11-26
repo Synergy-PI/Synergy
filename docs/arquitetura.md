@@ -110,8 +110,44 @@ cada nicho tem expressões **específicas** ("prontuário eletrônico", "gestão
 `LIKE` no banco e
 repetir o mesmo teste em memória para pontuar e explicar o resultado ("Termos encontrados").
 
+**Listagem** (`src/components/tenders/tender-table.tsx`): os editais aparecem em tabela (objeto, órgão,
+modalidade, valor estimado, encerramento e links oficiais), com paginador numerado e seletor de 20, 50 ou
+100 itens por página. Página e tamanho ficam na URL (`pagina`, `porPagina`), como os demais filtros; trocar
+o tamanho mantém à vista o primeiro item da página atual (`pageForPageSize`).
+
 É uma **triagem por palavras**, não uma análise do edital: a decisão de participar continua sendo humana.
-O resumo dos requisitos de habilitação com IA é a próxima etapa (ver `docs/roadmap-do-produto.md`).
+
+### Requisitos do edital
+
+Clicar em uma licitação abre `/app/licitacoes/[id]`, com os requisitos de habilitação em tabela. Medimos em
+nov/2026, com 65 editais do Paraná, que o gargalo é **baixar o edital do PNCP** (mediana de 17 s por
+licitação, 27% dos arquivos falham na primeira tentativa); ler o texto (~0,7 s) e localizar a seção de
+habilitação por regras (~40 ms) são rápidos. Por isso o usuário nunca espera pelo download:
+
+```mermaid
+flowchart LR
+  S[sync.ts] -->|editais que casam com algum nicho| Q[(TenderAnalysis\nfila no banco)]
+  U[Startup abre a licitação] -->|requestTenderRequirements| Q
+  Q --> W[analysis.ts\num edital por vez]
+  W -->|lista e baixa| P[API de integração do PNCP]
+  W -->|PDF, DOCX, DOC, RTF, ZIP| T[document-text.ts]
+  T --> R[requirements.ts\nregras, sem IA]
+  R --> DB[(TenderRequirement)]
+  DB -->|opcional| IA[requirements-ai.ts\nOpenRouter]
+```
+
+- **Fila no banco** (`src/lib/tenders/analysis.ts`): depois de sincronizar um estado, os editais que casam
+  com algum nicho entram na fila; um pedido de usuário passa à frente. Falhas passageiras do PNCP são
+  tentadas de novo com espera crescente (`analysis-policy.ts`). A fila é retomada quando o servidor inicia
+  (`src/instrumentation.ts`). O resultado é gravado por licitação e vale para todas as startups.
+- **Extração por regras** (`requirements.ts`, puro, com testes): localiza as seções de habilitação, quebra
+  em cláusulas e classifica por grupo (técnica, econômico-financeira, jurídica, fiscal, declarações). Guarda
+  o texto literal e a página; nada é reescrito.
+- **IA opcional** (`requirements-ai.ts`): as cláusulas já localizadas vão numeradas ao modelo em uma única
+  chamada; ele devolve, por cláusula, exigência ou procedimento, categoria, título curto e destaque. A
+  resposta é conferida antes de gravar (todas as cláusulas, valores conhecidos, todo número do título
+  presente no texto). Usa a chave do OpenRouter do próprio usuário (perfil, cifrada) ou a do servidor
+  (`OPENROUTER_API_KEY`); sem chave, a tabela por regras continua disponível.
 
 ## Autenticação e autorização
 
