@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { parseTenderFilters, tenderFiltersQuery, type TenderFilterContext } from './filters';
+import {
+  pageForPageSize,
+  parseTenderFilters,
+  tenderFiltersQuery,
+  type TenderFilterContext,
+} from './filters';
 
 const context: TenderFilterContext = {
   defaultNicheSlug: 'fintech',
@@ -16,6 +21,7 @@ describe('parseTenderFilters', () => {
       modalityId: null,
       sort: 'relevancia',
       page: 1,
+      pageSize: 20,
     });
   });
 
@@ -51,6 +57,7 @@ describe('parseTenderFilters', () => {
         ordem: 'valor',
         pagina: '3',
         modalidade: '6',
+        porPagina: '50',
       },
       context,
     );
@@ -61,7 +68,15 @@ describe('parseTenderFilters', () => {
       modalityId: 6,
       sort: 'valor',
       page: 3,
+      pageSize: 50,
     });
+  });
+
+  it('só aceita 20, 50 ou 100 itens por página', () => {
+    expect(parseTenderFilters({ porPagina: '100' }, context).pageSize).toBe(100);
+    for (const porPagina of ['10', '25', '1000', '0', '-50', '50.0', 'abc', '']) {
+      expect(parseTenderFilters({ porPagina }, context).pageSize).toBe(20);
+    }
   });
 
   it('não usa um nicho padrão sem termos de busca', () => {
@@ -90,5 +105,36 @@ describe('tenderFiltersQuery', () => {
   it('deixa explícito quando não há filtro de nicho ou estado', () => {
     const filters = parseTenderFilters({ nicho: 'todos', uf: 'todos' }, context);
     expect(tenderFiltersQuery(filters)).toBe('nicho=todos&uf=todos&ordem=prazo');
+  });
+
+  it('só inclui os itens por página quando diferem do padrão', () => {
+    const filters = parseTenderFilters({ porPagina: '50', pagina: '2' }, context);
+    const query = tenderFiltersQuery(filters);
+    expect(query).toBe('nicho=fintech&uf=PR&ordem=relevancia&pagina=2&porPagina=50');
+    expect(parseTenderFilters(Object.fromEntries(new URLSearchParams(query)), context)).toEqual(
+      filters,
+    );
+    expect(tenderFiltersQuery(filters, { pageSize: 20, page: 1 })).toBe(
+      'nicho=fintech&uf=PR&ordem=relevancia',
+    );
+  });
+});
+
+describe('pageForPageSize', () => {
+  const at = (pagina: string, porPagina: string) =>
+    parseTenderFilters({ pagina, porPagina }, context);
+
+  it('mantém à vista o primeiro item da página atual', () => {
+    // Página 4 de 20 em 20 começa no item 61, que fica na página 2 de 50 em 50.
+    expect(pageForPageSize(at('4', '20'), 50)).toBe(2);
+    expect(pageForPageSize(at('4', '20'), 100)).toBe(1);
+    // Página 2 de 100 em 100 começa no item 101: página 6 de 20 em 20 e página 3 de 50 em 50.
+    expect(pageForPageSize(at('2', '100'), 20)).toBe(6);
+    expect(pageForPageSize(at('2', '100'), 50)).toBe(3);
+  });
+
+  it('fica na primeira página e não muda nada com o mesmo tamanho', () => {
+    expect(pageForPageSize(at('1', '20'), 100)).toBe(1);
+    expect(pageForPageSize(at('7', '50'), 50)).toBe(7);
   });
 });

@@ -18,6 +18,15 @@ const dateTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
   minute: '2-digit',
 });
 
+const shortDateTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: TIME_ZONE,
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
 const timeFormatter = new Intl.DateTimeFormat('pt-BR', {
   timeZone: TIME_ZONE,
   hour: '2-digit',
@@ -30,6 +39,11 @@ export function formatDate(date: Date | string): string {
 
 export function formatDateTime(date: Date | string): string {
   return dateTimeFormatter.format(new Date(date));
+}
+
+/** Ex.: "27/11/2026, 09:00" — formato compacto para colunas de tabela. */
+export function formatDateTimeShort(date: Date | string): string {
+  return shortDateTimeFormatter.format(new Date(date));
 }
 
 export function formatTime(date: Date | string): string {

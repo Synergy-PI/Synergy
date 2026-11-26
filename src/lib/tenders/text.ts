@@ -58,6 +58,14 @@ export function stemToken(token: string): string {
   return token;
 }
 
+/** Minúsculas e sem acentos, mantendo pontuação e espaços (para comparar trechos de documentos). */
+export function fold(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
 /** Quebra o texto em palavras normalizadas (minúsculas, sem acentos, plural reduzido, sem ligações). */
 export function tokenize(text: string): string[] {
   return text

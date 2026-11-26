@@ -12,6 +12,7 @@ import 'server-only';
 import { prisma } from '@/lib/prisma';
 import { fetchOpenTendersPage, PncpError, type OpenTendersQuery } from '@/lib/pncp/client';
 import { parseTendersPage, type NormalizedTender, type TendersPage } from '@/lib/pncp/normalize';
+import { enqueueNicheTenderAnalyses } from './analysis';
 import type { Uf } from './states';
 import { syncAvailability, type SyncAvailability } from './sync-policy';
 import { toSearchText } from './text';
@@ -132,6 +133,12 @@ async function syncState(uf: Uf): Promise<void> {
         error: null,
       },
     });
+
+    // Com o estado atualizado, os editais que casam com algum nicho entram na fila de análise dos
+    // documentos, para que os requisitos estejam prontos quando uma startup abrir a licitação.
+    await enqueueNicheTenderAnalyses(uf).catch((queueError) =>
+      console.error(`[licitações] não foi possível enfileirar as análises de ${uf}`, queueError),
+    );
   } catch (error) {
     console.error(`[licitações] sincronização de ${uf} falhou`, error);
     const message =

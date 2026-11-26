@@ -21,6 +21,10 @@ erDiagram
   User ||--o{ ForumReply : "escreve"
   RoadmapStep ||--o{ RoadmapProgress : "progresso"
   StartupProfile ||--o{ RoadmapProgress : "conclui"
+  User ||--o| UserAiKey : "chave de IA"
+  Tender ||--o| TenderAnalysis : "análise"
+  TenderAnalysis ||--o{ TenderRequirement : "requisitos"
+  User ||--o{ TenderAnalysis : "pediu a IA"
 
   User {
     string id PK
@@ -75,6 +79,32 @@ erDiagram
     datetime closesAt
     datetime lastSeenAt
   }
+  TenderAnalysis {
+    string tenderId PK
+    enum status "PENDING | RUNNING | SUCCEEDED | UNAVAILABLE"
+    int priority
+    int attempts
+    datetime nextAttemptAt
+    json documents
+    enum aiStatus "NONE | PENDING | RUNNING | SUCCEEDED | FAILED"
+    string aiRequestedById FK
+  }
+  TenderRequirement {
+    string id PK
+    string tenderId FK
+    int position
+    enum category
+    boolean procedural
+    text text "texto literal da cláusula"
+    int page
+    string aiTitle
+    boolean aiHighlight
+  }
+  UserAiKey {
+    string userId PK
+    string ciphertext "AES-256-GCM"
+    string last4
+  }
   TenderSync {
     string uf PK
     enum status "RUNNING | SUCCEEDED | FAILED"
@@ -86,9 +116,11 @@ erDiagram
   }
 ```
 
-`Tender` e `TenderSync` não se relacionam com as demais tabelas: são um espelho das licitações abertas no
-PNCP (ver [Licitações](arquitetura.md#licitações-integração-com-o-pncp)). O vínculo com a startup é calculado
-em tempo de consulta, a partir do nicho.
+`Tender` e `TenderSync` são um espelho das licitações abertas no PNCP (ver
+[Licitações](arquitetura.md#licitações-integração-com-o-pncp)). O vínculo com a startup é calculado em tempo
+de consulta, a partir do nicho. `TenderAnalysis` e `TenderRequirement` guardam os requisitos lidos do edital
+de cada licitação (um resultado por licitação, compartilhado por todas as startups) e somem em cascata quando
+a licitação sai do banco.
 
 ## Tabelas
 
@@ -108,19 +140,25 @@ em tempo de consulta, a partir do nicho.
 | `LandingPageTemplate`      | Catálogo de templates (arquivos em `public/templates`)                                                                                                              |
 | `Tender`                   | Licitações com propostas abertas copiadas da API oficial do PNCP (única por `pncpId`); `searchText` é o objeto normalizado usado na busca por nicho e palavra-chave |
 | `TenderSync`               | Controle da sincronização de licitações por estado (uma linha por UF): situação, progresso e data da última atualização completa                                    |
+| `TenderAnalysis`           | Fila e resultado da leitura dos documentos de uma licitação (1:1 com `Tender`): situação, tentativas, documentos lidos e a organização opcional por IA              |
+| `TenderRequirement`        | Cláusulas da seção de habilitação do edital: texto literal, documento, página, categoria e, quando houver, a classificação da IA (título, destaque)                 |
+| `UserAiKey`                | Chave do OpenRouter do usuário (1:1 com `User`), cifrada com AES-256-GCM; só os últimos 4 caracteres são exibidos                                                   |
 
 ### Enums
 
-| Enum               | Valores                                                             |
-| ------------------ | ------------------------------------------------------------------- |
-| `Role`             | `STARTUP`, `INVESTOR`, `PROFESSIONAL`, `ADMIN`                      |
-| `Plan`             | `FREE`, `PREMIUM`                                                   |
-| `StartupStage`     | `IDEA`, `VALIDATION`, `MVP`, `TRACTION`, `SCALE`                    |
-| `EventType`        | `HACKATHON`, `MEETUP`, `PITCH_DAY`, `WORKSHOP`, `DEMO_DAY`, `OTHER` |
-| `EventOrigin`      | `INTERNAL`, `EXTERNAL`                                              |
-| `JobType`          | `CLT`, `PJ`, `FREELANCE`, `INTERNSHIP`                              |
-| `WorkMode`         | `REMOTE`, `HYBRID`, `ONSITE`                                        |
-| `TenderSyncStatus` | `RUNNING`, `SUCCEEDED`, `FAILED`                                    |
+| Enum                        | Valores                                                             |
+| --------------------------- | ------------------------------------------------------------------- |
+| `Role`                      | `STARTUP`, `INVESTOR`, `PROFESSIONAL`, `ADMIN`                      |
+| `Plan`                      | `FREE`, `PREMIUM`                                                   |
+| `StartupStage`              | `IDEA`, `VALIDATION`, `MVP`, `TRACTION`, `SCALE`                    |
+| `EventType`                 | `HACKATHON`, `MEETUP`, `PITCH_DAY`, `WORKSHOP`, `DEMO_DAY`, `OTHER` |
+| `EventOrigin`               | `INTERNAL`, `EXTERNAL`                                              |
+| `JobType`                   | `CLT`, `PJ`, `FREELANCE`, `INTERNSHIP`                              |
+| `WorkMode`                  | `REMOTE`, `HYBRID`, `ONSITE`                                        |
+| `TenderSyncStatus`          | `RUNNING`, `SUCCEEDED`, `FAILED`                                    |
+| `TenderAnalysisStatus`      | `PENDING`, `RUNNING`, `SUCCEEDED`, `UNAVAILABLE`                    |
+| `TenderAiStatus`            | `NONE`, `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`                 |
+| `TenderRequirementCategory` | `TECHNICAL`, `FINANCIAL`, `LEGAL`, `FISCAL`, `DECLARATION`, `OTHER` |
 
 Os rótulos em português de cada valor ficam em `src/lib/labels.ts`.
 
@@ -134,8 +172,11 @@ Os rótulos em português de cada valor ficam em `src/lib/labels.ts`.
 - Datas são armazenadas em UTC. Entradas de formulário são interpretadas como horário de Brasília
   (`parseDateTimeLocal`) e exibidas com `Intl` em `America/Sao_Paulo` (`src/lib/format.ts`).
 - `Tender` guarda apenas licitações que aceitam propostas: as encerradas, revogadas ou suspensas são
-  removidas ao fim de cada sincronização do estado. Não crie chaves estrangeiras para `Tender` sem antes
-  trocar essa remoção por uma marcação (ver backlog em `docs/roadmap-do-produto.md`).
+  removidas ao fim de cada sincronização do estado. Tabelas ligadas a `Tender` precisam de
+  `onDelete: Cascade` (como `TenderAnalysis`), ou essa remoção deve virar uma marcação antes (ver backlog em
+  `docs/roadmap-do-produto.md`).
+- Segredos de usuários (`UserAiKey.ciphertext`) são cifrados com uma chave derivada de `SESSION_SECRET`
+  (`src/lib/crypto/secret-box.ts`). Trocar o `SESSION_SECRET` invalida as chaves salvas.
 
 ## Como alterar o modelo
 

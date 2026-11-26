@@ -294,6 +294,13 @@ sincronizado sob demanda pelo botão da página (leva vários minutos e roda em 
 logs do `app` — falhas aparecem como `[licitações] sincronização de <UF> falhou`. Se o container reiniciar
 durante uma sincronização, basta pedi-la de novo na página.
 
+**Requisitos dos editais**: depois de cada sincronização, o `app` baixa em segundo plano os editais que casam
+com algum nicho (`https://pncp.gov.br/api/pncp`), um por vez; a fila fica no banco e é retomada quando o
+container reinicia. Falhas aparecem nos logs como `[requisitos] ...`. Para a organização por IA, defina
+`OPENROUTER_API_KEY` (opcional; cada startup pode usar a própria chave, cadastrada no perfil) e, se quiser
+outro modelo, `OPENROUTER_MODEL`. As chaves dos usuários são cifradas com uma chave derivada de
+`SESSION_SECRET`: trocar o `SESSION_SECRET` obriga os usuários a cadastrá-las de novo.
+
 ## Checklist de produção
 
 - [ ] `SESSION_SECRET`, `MYSQL_PASSWORD` e `MYSQL_ROOT_PASSWORD` fortes e únicos

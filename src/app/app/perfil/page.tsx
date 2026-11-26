@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { aiKeySource, getUserAiKeyInfo } from '@/lib/ai/keys';
 import { requireUser } from '@/lib/auth/dal';
 import { listNiches } from '@/lib/data/niches';
 import { prisma } from '@/lib/prisma';
@@ -8,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/ui/page-header';
 import { PlanBadge } from '@/components/ui/plan-badge';
+import { AiKeyForm } from './ai-key-form';
 import {
   AccountForm,
   InvestorProfileForm,
@@ -56,6 +58,12 @@ export default async function ProfilePage() {
       : null,
     user.startup ? listNiches() : Promise.resolve([]),
   ]);
+
+  // A IA organiza os requisitos das licitações, que são vistas por startups (e administradores).
+  const usesTenders = user.role === 'STARTUP' || user.role === 'ADMIN';
+  const [aiKey, aiSource] = usesTenders
+    ? await Promise.all([getUserAiKeyInfo(user.id), aiKeySource(user.id)])
+    : [null, 'none' as const];
 
   return (
     <div className="space-y-8">
@@ -106,6 +114,44 @@ export default async function ProfilePage() {
             </CardHeader>
             <CardContent>
               <InvestorProfileForm profile={investor} />
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {usesTenders ? (
+          <Card id="ia" className="scroll-mt-6 lg:col-start-2">
+            <CardHeader>
+              <CardTitle>Inteligência artificial nas licitações</CardTitle>
+              <CardDescription>
+                Com uma chave do OpenRouter, a IA organiza os requisitos de cada edital que você
+                abrir: separa as exigências das regras de procedimento e destaca as que mais
+                restringem a participação.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <AiKeyForm
+                saved={
+                  aiKey ? { last4: aiKey.last4, updatedLabel: formatDate(aiKey.updatedAt) } : null
+                }
+              />
+              <ul className="list-disc space-y-1 pl-5 text-xs text-slate-500">
+                <li>
+                  Sua chave é usada em uma chamada por edital, quando você abre os requisitos de uma
+                  licitação que a IA ainda não organizou. O resultado fica salvo e aparece para as
+                  outras startups.
+                </li>
+                <li>
+                  Os modelos gratuitos do OpenRouter permitem 50 chamadas por dia (1.000 para contas
+                  que já compraram US$ 10 em créditos).
+                </li>
+                <li>
+                  {aiSource === 'shared'
+                    ? 'Sem chave própria, você usa a chave compartilhada do Synergy, limitada a 15 editais por hora.'
+                    : aiSource === 'own'
+                      ? 'Se você remover a chave, os requisitos continuam disponíveis pela triagem por regras.'
+                      : 'Sem chave, os requisitos continuam disponíveis pela triagem por regras, sem a organização da IA.'}
+                </li>
+              </ul>
             </CardContent>
           </Card>
         ) : null}

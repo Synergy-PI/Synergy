@@ -14,6 +14,9 @@ Enum EventOrigin { INTERNAL EXTERNAL }
 Enum JobType { CLT PJ FREELANCE INTERNSHIP }
 Enum WorkMode { REMOTE HYBRID ONSITE }
 Enum TenderSyncStatus { RUNNING SUCCEEDED FAILED }
+Enum TenderAnalysisStatus { PENDING RUNNING SUCCEEDED UNAVAILABLE }
+Enum TenderAiStatus { NONE PENDING RUNNING SUCCEEDED FAILED }
+Enum TenderRequirementCategory { TECHNICAL FINANCIAL LEGAL FISCAL DECLARATION OTHER }
 
 Table User {
   id varchar(191) [pk]
@@ -171,7 +174,7 @@ Table LandingPageTemplate {
   fileUrl varchar(191) [not null]
 }
 
-// Licitações abertas espelhadas da API oficial do PNCP (sem relação com as demais tabelas).
+// Licitações abertas espelhadas da API oficial do PNCP.
 Table Tender {
   id varchar(191) [pk]
   pncpId varchar(40) [not null, unique, note: 'número de controle PNCP']
@@ -212,4 +215,62 @@ Table TenderSync {
   tenderCount int [not null, default: 0]
   error varchar(300)
   updatedAt datetime [not null]
+}
+
+// Chave do OpenRouter do usuário, cifrada (AES-256-GCM com chave derivada de SESSION_SECRET).
+Table UserAiKey {
+  userId varchar(191) [pk, ref: - User.id]
+  ciphertext varchar(600) [not null]
+  last4 char(4) [not null]
+  createdAt datetime [not null, default: `now()`]
+  updatedAt datetime [not null]
+}
+
+// Fila e resultado da leitura dos documentos de uma licitação (some junto com ela).
+Table TenderAnalysis {
+  tenderId varchar(191) [pk, ref: - Tender.id]
+  status TenderAnalysisStatus [not null, default: 'PENDING']
+  priority int [not null, default: 0, note: 'pedidos de usuários (1) passam à frente']
+  attempts int [not null, default: 0]
+  nextAttemptAt datetime [not null, default: `now()`]
+  heartbeatAt datetime
+  completedAt datetime
+  error varchar(300)
+  documents json [note: 'documentos lidos e falhas']
+  requirementCount int [not null, default: 0]
+  aiStatus TenderAiStatus [not null, default: 'NONE']
+  aiModel varchar(191)
+  aiError varchar(300)
+  aiHeartbeatAt datetime
+  aiCompletedAt datetime
+  aiRequestedById varchar(191) [ref: > User.id]
+  createdAt datetime [not null, default: `now()`]
+  updatedAt datetime [not null]
+
+  indexes {
+    (status, nextAttemptAt)
+    aiStatus
+    aiRequestedById
+  }
+}
+
+// Cláusulas da seção de habilitação, com o texto literal e onde estão.
+Table TenderRequirement {
+  id varchar(191) [pk]
+  tenderId varchar(191) [not null, ref: > TenderAnalysis.tenderId]
+  position int [not null]
+  category TenderRequirementCategory [not null]
+  procedural boolean [not null, default: false]
+  label varchar(24)
+  text text [not null]
+  documentType varchar(80) [not null]
+  page int [not null]
+  aiCategory TenderRequirementCategory
+  aiProcedural boolean
+  aiTitle varchar(200)
+  aiHighlight boolean
+
+  indexes {
+    (tenderId, position) [unique]
+  }
 }

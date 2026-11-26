@@ -127,12 +127,20 @@ function isOpportunityModality(modalityName: string): boolean {
   return !NON_COMPETITIVE_MODALITIES.has(first);
 }
 
-/** Página oficial da contratação no portal do PNCP. */
-export function pncpTenderUrl(pncpId: string): string | null {
+export type PncpTenderRef = { cnpj: string; year: string; sequence: number };
+
+/** Partes do número de controle PNCP usadas nos endereços da API e do portal. */
+export function parsePncpId(pncpId: string): PncpTenderRef | null {
   const match = PNCP_ID.exec(pncpId);
   if (!match) return null;
   const [, cnpj, sequence, year] = match;
-  return `https://pncp.gov.br/app/editais/${cnpj}/${year}/${Number(sequence)}`;
+  return { cnpj, year, sequence: Number(sequence) };
+}
+
+/** Página oficial da contratação no portal do PNCP. */
+export function pncpTenderUrl(pncpId: string): string | null {
+  const ref = parsePncpId(pncpId);
+  return ref ? `https://pncp.gov.br/app/editais/${ref.cnpj}/${ref.year}/${ref.sequence}` : null;
 }
 
 export function parseTender(raw: unknown): TenderParseResult {
